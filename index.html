@@ -1,209 +1,64 @@
-<!--
-GitHub Image Gallery
-Single-file HTML page that lists images from a GitHub repo folder (or from a local manifest)
-
-HOW TO USE:
-1) If you host this on GitHub Pages and want it to read images from a public repository folder, set `repoOwner`, `repoName`, and `repoPath` below and keep `useGitHubApi = true`.
-   - Example: repoOwner = 'your-user', repoName = 'your-repo', repoPath = 'images'
-   - The GitHub Contents API will list files in that path and this page will display images (public repo only).
-
-2) If you prefer a local approach, create a file `images.json` in the same folder with an array of filenames or objects, e.g.
-   ["cat.jpg","dog.png"]  OR  [{"name":"cat.jpg","url":"/images/cat.jpg"}, ...]
-   and keep `useGitHubApi = false`.
-
-3) If your static server shows directory listings (rare for GitHub Pages), the fallback fetch-from-./ method may work.
-
-Limitations & notes:
-- For private GitHub repos you need to supply a token and change the fetch headers (not implemented here).
-- GitHub's API is rate-limited for unauthenticated requests (but reasonable for casual use).
-
---><!doctype html>
+<!doctype html>
 
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Image Gallery (GitHub)</title>
+  <title>Image Gallery</title>
   <style>
-    :root{ --gap:12px; --card-r:12px; }
-    body{ font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial; margin:20px; background:#0f172a; color:#e6eef8 }
-    h1{ font-size:1.4rem; margin:0 0 12px 0 }
-    .controls{ display:flex; gap:10px; align-items:center; margin-bottom:14px }
-    input[type=text]{ padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.02); color:inherit }
-    button{ padding:8px 12px; border-radius:8px; border:0; cursor:pointer; background:#06b6d4; color:#002; font-weight:600 }
-    .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:var(--gap) }
-    .card{ position:relative; border-radius:var(--card-r); overflow:hidden; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); box-shadow: 0 6px 18px rgba(2,6,23,0.6); display:flex; align-items:center; justify-content:center; min-height:120px }
-    .card img{ display:block; max-width:100%; max-height:160px; object-fit:cover; width:100% }
-    .meta{ position:absolute; left:8px; right:8px; bottom:8px; display:flex; justify-content:space-between; gap:6px }
-    .name{ font-size:0.75rem; padding:6px 8px; background:rgba(0,0,0,0.45); border-radius:8px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-    .dl{ display:inline-flex; align-items:center; gap:6px; font-size:0.8rem; cursor:pointer; user-select:none; padding:6px 8px; background:rgba(255,255,255,0.04); border-radius:8px }
-    .dl svg{ width:16px; height:16px }
-    .status{ margin-top:8px; font-size:0.9rem; color: #cbd5e1 }
-    footer{ margin-top:18px; font-size:0.8rem; color: #94a3b8 }
-    .empty{ padding:40px; text-align:center; color:#94a3b8 }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;margin:20px;background:#0f172a;color:#e6eef8}
+    h1{font-size:1.4rem;margin-bottom:12px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+    .card{position:relative;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));box-shadow:0 6px 18px rgba(2,6,23,0.6);display:flex;align-items:center;justify-content:center;min-height:120px}
+    .card img{display:block;max-width:100%;max-height:160px;object-fit:cover;width:100%}
+    .meta{position:absolute;left:8px;right:8px;bottom:8px;display:flex;justify-content:space-between;gap:6px}
+    .name{font-size:0.75rem;padding:6px 8px;background:rgba(0,0,0,0.45);border-radius:8px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .dl{display:inline-flex;align-items:center;gap:6px;font-size:0.8rem;cursor:pointer;user-select:none;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:8px;text-decoration:none;color:#e6eef8}
+    .dl svg{width:16px;height:16px}
+    .status{margin-top:8px;font-size:0.9rem;color:#cbd5e1}
+    .empty{padding:40px;text-align:center;color:#94a3b8}
   </style>
 </head>
 <body>
   <h1>Image Gallery</h1>
-  <div class="controls">
-    <label style="font-size:0.9rem; color:#cbd5e1">Use GitHub API?</label>
-    <input id="useGitHubApi" type="checkbox" checked />
-    <label style="font-size:0.85rem; color:#cbd5e1">Owner</label>
-    <input id="repoOwner" type="text" placeholder="owner" value="" />
-    <label style="font-size:0.85rem; color:#cbd5e1">Repo</label>
-    <input id="repoName" type="text" placeholder="repo" value="" />
-    <label style="font-size:0.85rem; color:#cbd5e1">Path</label>
-    <input id="repoPath" type="text" placeholder="path (e.g. images)" value="" />
-    <button id="loadBtn">Load</button>
-  </div>  <div id="status" class="status">Idle — enter repo details and click Load.</div>
+  <div id="status" class="status">Loading images...</div>
   <div id="gallery" class="grid" aria-live="polite"></div>
-  <div id="empty" class="empty" style="display:none">No images found.</div>
-  <footer>Tip: for GitHub Pages hosting, make sure the repo is public. For local/static sites, create an <code>images.json</code> manifest or allow directory listings.</footer>  <script>
-    // --- Configuration defaults ---
-    const state = {
-      useGitHubApi: true,      // if false, will try to fetch ./images.json then fallback to ./
-      repoOwner: '',
-      repoName: '',
-      repoPath: ''
+  <div id="empty" class="empty" style="display:none">No images found.</div>  <script>
+    const gallery = document.getElementById('gallery');
+    const status = document.getElementById('status');
+    const empty = document.getElementById('empty');
+
+    function isImage(name){
+      return /\.(jpe?g|png|gif|webp|avif|svg)$/i.test(name);
     }
-
-    // --- Helpers ---
-    const isImage = (name) => /\.(jpe?g|png|gif|webp|avif|svg)$/i.test(name)
-
-    function showStatus(text){ document.getElementById('status').textContent = text }
-    function clearGallery(){ document.getElementById('gallery').innerHTML = ''; document.getElementById('empty').style.display = 'none' }
 
     function makeCard(name, url){
-      const wrap = document.createElement('div'); wrap.className = 'card'
-      const img = document.createElement('img')
-      img.alt = name
-      img.loading = 'lazy'
-      img.src = url
-      img.onerror = () => { img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="240"><rect width="100%" height="100%" fill="%230b1220"/><text x="50%" y="50%" fill="%23fff" dominant-baseline="middle" text-anchor="middle" font-size="18">Failed to load</text></svg>' }
-      wrap.appendChild(img)
-
-      const meta = document.createElement('div'); meta.className = 'meta'
-      const nm = document.createElement('div'); nm.className = 'name'; nm.title = name; nm.textContent = name
-      const dl = document.createElement('a'); dl.className = 'dl'; dl.href = url; dl.setAttribute('download', name); dl.title = 'Download ' + name
-
-      // download icon (svg)
-      dl.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M12 3v10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M8 9l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M21 21H3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>Download</span>
-      `
-
-      meta.appendChild(nm); meta.appendChild(dl); wrap.appendChild(meta)
-
-      // clicking the image opens in new tab
-      img.addEventListener('click', () => window.open(url, '_blank'))
-
-      return wrap
+      const wrap=document.createElement('div');wrap.className='card';
+      const img=document.createElement('img');img.src=url;img.alt=name;img.loading='lazy';
+      img.addEventListener('click',()=>window.open(url,'_blank'));
+      const meta=document.createElement('div');meta.className='meta';
+      const nm=document.createElement('div');nm.className='name';nm.textContent=name;
+      const dl=document.createElement('a');dl.className='dl';dl.href=url;dl.download=name;dl.title='Download '+name;
+      dl.innerHTML=`<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 9l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 21H3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      meta.appendChild(nm);meta.appendChild(dl);wrap.appendChild(img);wrap.appendChild(meta);
+      return wrap;
     }
 
-    // --- Fetching strategies ---
-    async function fetchFromGitHub(owner, repo, path){
-      const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path || '')}`
-      showStatus('Fetching from GitHub API...')
-      const res = await fetch(apiUrl)
-      if(!res.ok) throw new Error(`GitHub API returned ${res.status}`)
-      const data = await res.json()
-      // data is an array of file objects when path is a folder
-      if(!Array.isArray(data)) throw new Error('GitHub API did not return a folder listing')
-      // map to image entries
-      return data.filter(f => f.type === 'file' && isImage(f.name)).map(f => ({ name: f.name, url: f.download_url }))
-    }
-
-    async function fetchFromManifest(){
-      showStatus('Fetching local images.json manifest...')
-      const res = await fetch('./images.json')
-      if(!res.ok) throw new Error('images.json not found')
-      const data = await res.json()
-      // Accept array of strings or objects with url/name
-      const items = data.map(it => {
-        if(typeof it === 'string'){
-          const url = it.startsWith('http') ? it : `./${it.replace(/^\//,'')}`
-          const name = url.split('/').pop()
-          return { name, url }
-        } else {
-          return { name: it.name || (it.url||'').split('/').pop(), url: it.url }
-        }
-      }).filter(i => isImage(i.name))
-      return items
-    }
-
-    async function tryDirectoryListing(){
-      showStatus('Trying to fetch directory listing from server...')
-      const res = await fetch('./')
-      if(!res.ok) throw new Error('Directory listing not available')
-      const text = await res.text()
-      // crude: parse anchor tags and pick image links
-      const urls = Array.from(text.matchAll(/href\s*=\s*"([^"#?]+)"/ig)).map(m => m[1])
-      const imageUrls = urls.filter(u => isImage(u)).map(u => ({ name: u.split('/').pop(), url: u.startsWith('http') ? u : './' + u.replace(/^\//,'') }))
-      return imageUrls
-    }
-
-    // --- Main loader ---
-    async function loadGallery(){
-      clearGallery()
-      const useGitHubApi = document.getElementById('useGitHubApi').checked
-      const owner = document.getElementById('repoOwner').value.trim()
-      const repo = document.getElementById('repoName').value.trim()
-      const path = document.getElementById('repoPath').value.trim()
-
-      let items = []
+    async function loadLocalImages(){
       try{
-        if(useGitHubApi){
-          if(!owner || !repo){ showStatus('Please provide owner and repo when using GitHub API'); return }
-          items = await fetchFromGitHub(owner, repo, path)
-        } else {
-          // try manifest, then directory listing
-          try{ items = await fetchFromManifest() } catch(e){
-            try{ items = await tryDirectoryListing() } catch(e2){ throw new Error('No images found using manifest or directory listing') }
-          }
-        }
-
-        if(!items.length){ document.getElementById('empty').style.display = ''; showStatus('No image files found') ; return }
-
-        const gallery = document.getElementById('gallery')
-        for(const it of items){
-          const card = makeCard(it.name, it.url)
-          gallery.appendChild(card)
-        }
-        showStatus(`Loaded ${items.length} image(s)`)
-      }catch(err){
-        console.error(err)
-        showStatus('Error: ' + err.message)
-        document.getElementById('empty').style.display = ''
+        const res=await fetch('./');
+        const text=await res.text();
+        const matches=[...text.matchAll(/href="([^"]+)"/g)].map(m=>m[1]);
+        const images=matches.filter(isImage).map(u=>({name:u.split('/').pop(),url:u}));
+        if(images.length===0){empty.style.display='';status.textContent='No images found.';return;}
+        images.forEach(it=>gallery.appendChild(makeCard(it.name,it.url)));
+        status.textContent=`Loaded ${images.length} image(s)`;
+      }catch(e){
+        status.textContent='Could not load images (directory listing not supported).';
+        empty.style.display='';
       }
     }
 
-    // initial wireup
-    document.getElementById('loadBtn').addEventListener('click', loadGallery)
-    // allow enter key in inputs
-    for(const id of ['repoOwner','repoName','repoPath']){
-      document.getElementById(id).addEventListener('keydown', (e)=>{ if(e.key === 'Enter') loadGallery() })
-    }
-
-    // preserve checkbox state visually
-    document.getElementById('useGitHubApi').addEventListener('change', ()=>{
-      const checked = document.getElementById('useGitHubApi').checked
-      if(checked) showStatus('Using GitHub API. Fill owner/repo/path and click Load.')
-      else showStatus('Using local manifest/directory listing. Create images.json or allow directory listing and click Load.')
-    })
-
-    // optional: auto-load if repoOwner/repoName set via URL query string
-    (function tryAutoFromQuery(){
-      const q = new URLSearchParams(location.search)
-      const owner = q.get('owner'); const repo = q.get('repo'); const path = q.get('path')
-      if(owner) document.getElementById('repoOwner').value = owner
-      if(repo) document.getElementById('repoName').value = repo
-      if(path) document.getElementById('repoPath').value = path
-      if(owner && repo){ document.getElementById('useGitHubApi').checked = true; loadGallery() }
-    })();
-
+    loadLocalImages();
   </script></body>
 </html>
